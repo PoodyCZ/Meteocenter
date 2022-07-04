@@ -14,19 +14,16 @@ int stationid = 1;
 // Promenne meteorologickych udaju
 float teplota = 0.0f, teplota1 = 0.0f, tlak = 0.0f;
 uint8_t vlhkost = 0;
-uint16_t vyska = 0;
-
-float konst = 1.0f; // konstanta napeti baterie
-float batt = 0.0f;
 
 // Prihlasovaci udaje k Wi-Fi
 const char ssid[] = "ssid";
 const char heslo[] = "pass";
 
-const int sleepTimeS = 60; // Doba uspani v sekundach:
+int sleepTimeS = 60; // Doba uspani v sekundach:
 
 void odesliDoDatabaze();
 void pripojit();
+void aktualizace();
 void ziskejHodnoty();
 
 void setup() {
@@ -44,6 +41,7 @@ void setup() {
   Serial.println("Stanice spustena!");
   pinMode(D0, WAKEUP_PULLUP);
   pripojit();
+  aktualizace();
   ziskejHodnoty();
   odesliDoDatabaze();
   Serial.println("Jdu spat!");
@@ -62,6 +60,24 @@ void pripojit() {
     Serial.print(".");
     delay(500);
   }
+  Serial.print("");
+}
+
+void aktualizace() {
+  Serial.println("Zacinam aktualizaci z DB");
+  WiFiClient client;
+  HTTPClient http;
+  String url = "http://192.168.0.5/api/api.php?stationid=";
+  url = url + stationid;
+  http.begin(client, url.c_str());
+  int httpCode = http.GET();
+  if (httpCode > 0) { 
+    String payload = http.getString();
+    DynamicJsonDocument data(1024);
+    deserializeJson(data, payload);
+    sleepTimeS = data["data"]["sleeptime"];
+  }
+  http.end();
 }
 
 void odesliDoDatabaze()
@@ -72,7 +88,6 @@ void odesliDoDatabaze()
   data["temperature"] = teplota;
   data["pressure"] = tlak;
   data["humidity"] = vlhkost;
-  data["battery"] = batt;
 
   String datastring;
   serializeJson(data, datastring);
@@ -96,12 +111,6 @@ void odesliDoDatabaze()
 // Funkce pro precteni hodnot ze senzoru do promennych
 void ziskejHodnoty() {
   tlak = tlakomer.readPressure() / 100.0f;
-  vyska = tlakomer.readAltitude();
-  teplota1 = tlakomer.readTemperature();
   teplota = teplomer.readTemperature();
   vlhkost = teplomer.readHumidity();
-
-  int nVoltageRaw = analogRead(A0);
-  float fVoltage = (float)nVoltageRaw * konst;
-  batt = fVoltage;
 }
